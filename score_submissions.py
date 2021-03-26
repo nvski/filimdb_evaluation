@@ -1,50 +1,84 @@
+import math
+from argparse import ArgumentParser
+from logging import warning
+
 import pathlib
 import os
 import re
 import shutil
 import json
+from pathlib import Path
 
-
-subs_folder = pathlib.Path("subs")
-eval_folder = pathlib.Path(".")
-path_to_results = pathlib.Path("results.json")
-
-
-if not path_to_results.exists():
-    with open(path_to_results, "w") as f:
-        json.dump({}, f)
-    known_results = {}
-else:
-    with open(path_to_results, "r") as f:
-        known_results = json.load(f)
-
-
-def process_script(id_, type_, name, known_results):
+def process_script(ds_name, package, file_name, id_, type_, name, known_results, path_to_results):
     from evaluate_ctrl import main
-    key = id_ + "_" + type_
+    key = f"{id_}_{type_}"
     if key not in known_results:
-        # current_dir = os.getcwd()
-        # os.chdir(str(pathlib.Path(current_dir) / "filmdb_evaluation"))
-        script_results = main()
-        # os.chdir(current_dir)
+        script_results = main(file_name=file_name, package=package, ds_name=ds_name)
         known_results[key] = script_results
         known_results[key]["name"] = name
-
-        with open(path_to_results, "w") as f:
+        with path_to_results.open("w") as f:
             json.dump(dict(sorted(known_results.items())), f, indent=4)
         print("#" * 100)
-    elif known_results[key].get("name") is None:
-        known_results[key]["name"] = name
-        with open(path_to_results, "w") as f:
-            json.dump(dict(sorted(known_results.items())), f, indent=4)
+    return known_results
 
+def load_current_results(results_folder):
+    current_results = {}
+    for p in results_folder.glob('*json'):
+        try:
+            for fres in results_folder.glob("results*.json"):
+                with fres.open("r") as inp:
+                    current_results.update(json.load(inp))
+        except Exception as e:
+            warning(str(e))
+    return current_results
 
-for file_path in sorted(subs_folder.glob("*.py")):
-    file_name = str(file_path.name)
-    student_id = re.search(r"_([0-9]+)_", file_name).group(1)
-    student_name = file_name.split("_", 1)[0]
-    subm_type = file_name.split(".", 1)[0].rsplit("_", 1)[-1]
-    print(file_name, student_name, student_id, subm_type)
-    path_to_copy = shutil.copy(str(file_path), eval_folder / "classifier.py")
-    process_script(student_id, subm_type, student_name, known_results)
-    os.remove(path_to_copy)
+SOLUTION_REGEX = r"(?P<name>^[^_]*)_(?:LATE_)?(?P<id>[0-9]{4,})_.*_(?P<type>[\w-]*$)"
+
+if __name__ == "__main__":
+
+    parser = ArgumentParser()
+    parser.add_argument("--hw_folder", help="Path to solutions folder. "
+                                            "Should have 'submissions' subfolder with assignment solution files"
+                                            "solution file format should match SOLUTION_REGEX",
+                        type=Path)
+    parser.add_argument("--index", help="Index of the submission to evaluate. Use for parallel evaluation.",
+                        default=None,
+                        type=int)
+    parser.add_argument("--ds_name", help="Dataset name.",
+                        default="FILIMDB_hidden",
+                        type=str)
+    args = parser.parse_args()
+
+    hw_folder = args.hw_folder
+    ds_name = args.ds_name
+
+    if not hw_folder.exists():
+        raise FileNotFoundError("Solutions directory does not exist")
+
+    eval_folder = hw_folder / "evaluation"
+    results_folder = hw_folder / "results"
+    submissions_folder = hw_folder / "submissions"
+
+    for folder in [eval_folder, results_folder]:
+        if not folder.exists():
+            folder.mkdir()
+
+    current_results = load_current_results(results_folder)
+    for index, file_path in enumerate(sorted(submissions_folder.glob("*/*.py"))):
+        file_name = str(file_path.stem)
+        if "__init__" in file_name:
+            continue
+        print(file_name, SOLUTION_REGEX)
+        matched = re.search(SOLUTION_REGEX, file_name)
+        if matched is None:
+            print(f"Couldn't match filename {file_name} with regex {SOLUTION_REGEX}")
+            continue
+        matched = matched.groups()
+
+        student_name, student_id, submission_type = matched
+        print(index, file_name, student_name, student_id, submission_type, sep=', ', flush=True)
+        if args.index is None or args.index == index:
+            process_script(ds_name=ds_name, file_name=file_name, id_=student_id, type_=submission_type, name=student_name,
+                           known_results=current_results,
+                           package=".".join(str(file_path).split("/")[:-1]),
+                           path_to_results=results_folder / f"results{index}.json")

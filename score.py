@@ -1,13 +1,16 @@
 from time import time
+from pathlib import Path
 import os
 import codecs
 import random
+import gzip
 
 random.seed(3)  # set random seed for each run of the script to produce the same results
 SCORED_PARTS = ('train', 'dev', 'test', 'dev-b', 'test-b')
+FILIMDB_PATH = Path(__file__).with_name("FILIMDB")
 
 
-def load_dataset_fast(data_dir='FILIMDB', parts=('train', 'dev', 'test')):
+def load_dataset_fast(data_dir=FILIMDB_PATH, parts=('train', 'dev', 'test')):
     """
     Loads data from specified directory. Returns dictionary part->(list of texts, list of corresponding labels).
     """
@@ -32,6 +35,24 @@ def load_dataset_fast(data_dir='FILIMDB', parts=('train', 'dev', 'test')):
             print('unlabeled', len(texts))
 
         part2xy[part] = (['%s/%d' % (part, i) for i in range(len(texts))], texts, labels)
+    return part2xy
+
+
+def load_labels_only(data_dir=FILIMDB_PATH, parts=('train', 'dev', 'test')):
+    """
+    Loads data from specified directory. Returns dictionary part->(list of corresponding labels).
+    """
+    part2xy = {}  # tuple(indexes, list of labels) for train and test parts
+    for part in parts:
+        print(f"Loading {part} set labels")
+        ypath = os.path.join(data_dir, f"{part}.labels")
+        if os.path.exists(ypath):
+            with codecs.open(ypath, 'r', encoding='utf-8') as inp:
+                labels = [s.strip() for s in inp.readlines()]
+            texts_number = len(labels)
+        else:
+            labels, texts_number = None, 0
+        part2xy[part] = (['%s/%d' % (part, i) for i in range(texts_number)], labels)
     return part2xy
 
 
@@ -79,7 +100,7 @@ def load_dir(subdir, cls, examples):
 def score(y_pred, y_true):
     assert len(y_pred) == len(y_true), 'Received %d but expected %d labels' % (len(y_pred), len(y_true))
     correct = sum(y1 == y2 for y1, y2 in zip(y_pred, y_true))
-    print('Number of correct/incorrect predictions: %d/%d' % (correct, len(y_pred)))
+    print('Number of correct/total predictions: %d/%d' % (correct, len(y_pred)))
     acc = 100.0 * correct / len(y_pred)
     return acc
 
@@ -94,26 +115,26 @@ def save_preds(preds, preds_fname):
     print('Predictions saved to %s' % preds_fname)
 
 
-def load_preds(preds_fname):
+def load_preds(preds_fname, compressed=False):
     """
     Save classifier predictions in format appropriate for scoring.
     """
-    with codecs.open(preds_fname, 'r') as inp:
+    with (gzip.open(preds_fname, 'rt') if compressed else codecs.open(preds_fname, 'r')) as inp:
         pairs = [l.strip().split('\t') for l in inp.readlines()]
     ids, preds = zip(*pairs)
     return ids, preds
 
 
-def score_preds(preds_fname, data_dir='FILIMDB'):
-    part2xy = load_dataset_fast(data_dir=data_dir, parts=SCORED_PARTS)
-    return score_preds_loaded(part2xy, preds_fname)
+def score_preds(preds_fname, data_dir=FILIMDB_PATH, compressed=False):
+    part2labels = load_labels_only(data_dir=data_dir, parts=SCORED_PARTS)
+    return score_preds_loaded(part2labels, preds_fname, compressed=compressed)
 
 
-def score_preds_loaded(part2xy, preds_fname):
-    pred_ids, pred_y = load_preds(preds_fname)
+def score_preds_loaded(part2labels, preds_fname, compressed=False):
+    pred_ids, pred_y = load_preds(preds_fname, compressed=compressed)
     pred_dict = {i: y for i, y in zip(pred_ids, pred_y)}
     scores = {}
-    for part, (true_ids, _, true_y) in part2xy.items():
+    for part, (true_ids, true_y) in part2labels.items():
         if true_y is None:
             print('no labels for %s set' % part)
             continue

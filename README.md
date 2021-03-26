@@ -39,11 +39,10 @@ def classify(texts, params):
 ```
 python evaluate.py
 ```
-
-5. Upload preds.tsv to http://compai-msu.info/.
-Register for the appropriate competition, you will receive an e-mail with submission instructions.
-6. Upload classifier to http://mdl.cs.msu.ru.
-Follow instructions at the appropriate Assignment Submission page there.
+5. if you need to pretrain your model on all sets of texts (train, test, dev, unlabeled, dev-b, test-b), use --transductive command-line argument:
+```
+python evaluate.py --transductive
+```
 
 
 # Language modeling tasks
@@ -68,5 +67,28 @@ git clone https://github.com/nvanva/filimdb_evaluation.git
     ```
     python evaluate_lm.py sampling --size=20 --start-text='the meaning of life is'
     ```
-6. Load preds.tsv to ??? (coming soon).
-7. Load lm.py to  http://mdl.cs.msu.ru
+
+# Transliteration task
+
+1. Clone this repository:
+```
+git clone https://github.com/nvanva/filimdb_evaluation.git
+```
+
+2. run init.sh to prepare dataset:
+```
+./init.sh
+```
+
+3. Check baseline implementation in translit\_baseline.py and evaluate it:
+```
+python evaluate_translit.py
+```
+
+4. Modify translit.py according to assignment description, change importing in evaluate_translit.py from `from translit_baseline import train, classify` to `from translit import train, classify`.
+
+5. Check results again:
+```
+python evaluate_translit.py
+```
+

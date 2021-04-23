@@ -102,10 +102,14 @@ def compute_mrr(preds):
 
 def compute_acc_1(preds, true):
     right_answers = 0
+    bonus = 0
     for pred, y in zip(preds, true):
         if pred[0] == y:
             right_answers += 1
-    return right_answers / len(preds)
+        elif pred[0] != pred[0] and y == 'нань':
+            print('Your test file contained empty string, skipping %f and %s' % (pred[0], y))
+            bonus += 1 # bugfix: skip empty line in test
+    return right_answers / (len(preds) - bonus)
 
 
 def score(preds, true):

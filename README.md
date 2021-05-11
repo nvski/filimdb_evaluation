@@ -72,7 +72,7 @@ git clone https://github.com/nvanva/filimdb_evaluation.git
 
 1. Clone this repository:
 ```
-git clone https://github.com/nvanva/filimdb_evaluation.git
+git clone https://github.com/skoltech-nlp/filimdb_evaluation.git
 ```
 
 2. run init.sh to prepare dataset:

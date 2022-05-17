@@ -1,3 +1,4 @@
+from sympy import as_finite_diff
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -30,7 +31,13 @@ class PositionalEncoding(nn.Module):
     def __init__(self, hidden_size, max_len=512):
         super(PositionalEncoding, self).__init__()
         pe = torch.zeros(max_len, hidden_size, requires_grad=False)
-        # TODO: implement your code here 
+
+        pe_ = torch.arange(max_len)[:,None].float()
+        pe_ = pe_ / 10000. ** (2*torch.arange(hidden_size).float() / hidden_size)[None, :]
+
+        pe[:, ::2] = torch.sin(pe_[:, :(hidden_size + 1)//2])
+        pe[:, 1::2] = torch.cos(pe_[:, :hidden_size//2])
+
         pe = pe.unsqueeze(0)
         # pe shape: (1, max_len, hidden_size)
         self.register_buffer('pe', pe)
@@ -108,7 +115,13 @@ class MultiHeadAttention(nn.Module):
         ## output shape: (batch size, number of heads, sequence length, head hidden size)
         ## TODO: provide your implementation here
         ## don't forget to apply dropout to attn_weights if self.dropout is not None
-        raise NotImplementedError
+        
+        attn_weights = query @ key.transpose(-1,-2) / ((key.shape[-1]) ** .5)
+        attn_weights = torch.where(mask, attn_weights, torch.tensor(-float('inf')))
+        attn_weights = F.softmax(attn_weights, -1)
+        if self.dropout is not None:
+            attn_weights = self.dropout_layer(attn_weights)
+        output = attn_weights @ value
         return output, attn_weights
 
     def forward(self, query, key, value, mask=None):
@@ -270,9 +283,10 @@ def prepare_model(config):
 class LrScheduler:
     def __init__(self, n_steps, **kwargs):
         self.type = kwargs['type']
+        self.n_steps = n_steps
         if self.type == 'warmup,decay_linear':
-            ## TODO: provide your implementation here
-            raise NotImplementedError
+            self.warmup_steps_part = kwargs["warmup_steps_part"]
+            self.lr_peak = kwargs["lr_peak"]
         else:
             raise ValueError(f'Unknown type argument: {self.type}')
         self._step = 0
@@ -288,8 +302,13 @@ class LrScheduler:
         if step is None:
             step = self._step
         if self.type == 'warmup,decay_linear':
-            ## TODO: provide your implementation here
-            raise NotImplementedError
+            part = step/self.n_steps
+            if part <= self.warmup_steps_part:
+                alpha = part / self.warmup_steps_part  # progress of current phase, from 0 to 1
+                self._lr = alpha * self.lr_peak
+            else:
+                alpha = (part - self.warmup_steps_part) / (1 - self.warmup_steps_part)  # progress of current phase
+                self._lr = (1 - alpha) * self.lr_peak
         return self._lr
 
     def state_dict(self):

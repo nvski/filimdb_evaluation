@@ -117,7 +117,7 @@ class MultiHeadAttention(nn.Module):
         ## don't forget to apply dropout to attn_weights if self.dropout is not None
         
         attn_weights = query @ key.transpose(-1,-2) / ((key.shape[-1]) ** .5)
-        attn_weights = torch.where(mask, attn_weights, torch.tensor(-float('inf')))
+        attn_weights = torch.where(mask, attn_weights, torch.tensor(-float('inf')).type_as(attn_weights))
         attn_weights = F.softmax(attn_weights, -1)
         if self.dropout is not None:
             attn_weights = self.dropout_layer(attn_weights)

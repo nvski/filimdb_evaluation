@@ -334,7 +334,7 @@ def run_epoch(data_iter, model, lr_scheduler, optimizer, device, verbose=False):
     total_tokens = 0
     total_loss = 0
     tokens = 0
-    loss_fn = nn.CrossEntropyLoss(reduction='sum')
+    loss_fn = nn.CrossEntropyLoss(reduction='sum', label_smoothing=0.2)
     for i, batch in tqdm(enumerate(data_iter)):
         encoder_input = batch[0].to(device)
         decoder_input = batch[1].to(device)
@@ -462,6 +462,8 @@ def train(source_strings, target_strings):
         'warmup_steps_part': 0.1,
         'lr_peak': 3e-4,
     }}
+    print(train_config)
+    print(model_config)    
 
     #Model training procedure
     optimizer = torch.optim.Adam(model.parameters(), lr=0.)
